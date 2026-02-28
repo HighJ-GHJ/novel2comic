@@ -22,6 +22,11 @@ from novel2comic.core.io import chapter_paths
 from novel2comic.core.manifest import load_manifest
 from novel2comic.stages.ingest import IngestStage
 from novel2comic.stages.segment import SegmentStage
+from novel2comic.stages.plan import PlanStage
+from novel2comic.stages.director_review import DirectorReviewStage
+from novel2comic.stages.tts import TTSStage
+from novel2comic.stages.align import AlignStage
+from novel2comic.stages.render import RenderStage
 from novel2comic.stages.base import StageContext
 
 
@@ -29,6 +34,7 @@ STAGE_ORDER = [
 	"ingest",
 	"segment",
 	"plan",
+	"director_review",
 	"tts",
 	"align",
 	"image",
@@ -44,18 +50,21 @@ def run_until(chapter_dir: str, ctx: StageContext, until: str) -> None:
 	stages = {
 		"ingest": IngestStage(),
 		"segment": SegmentStage(),
+		"plan": PlanStage(),
+		"director_review": DirectorReviewStage(),
+		"tts": TTSStage(),
+		"align": AlignStage(),
+		"render": RenderStage(),
 	}
 
 	for name in STAGE_ORDER:
-		# 计划阶段尚未实现：先停，避免误导用户以为已经跑完。
-		if name == "plan":
-			if until in ("plan", "tts", "align", "image", "render", "export"):
-				print("[INFO] plan stage not implemented yet; stop here.")
-				break
+		if name in ("image", "export") and until == name:
+			print(f"[INFO] {name} stage not implemented yet; stop here.")
+			break
 
 		stage = stages.get(name)
 		if stage is not None:
-			print(f"[RUN] stage={name}")
+			print(f"[RUN] stage={name}", flush=True)
 			stage.run(paths, ctx)
 
 		if name == until:
@@ -64,4 +73,4 @@ def run_until(chapter_dir: str, ctx: StageContext, until: str) -> None:
 	# 打印当前 stage，便于确认断点续跑的“锚点”。
 	if paths.manifest.exists():
 		m = load_manifest(paths.manifest)
-		print(f"[OK] current stage = {m.stage}")
+		print(f"[OK] current stage = {m.stage}", flush=True)

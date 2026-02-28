@@ -24,6 +24,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def find_project_root(start: Path | None = None) -> Path:
+	"""向上查找含 .env 的项目根目录，供 LLM/TTS 等加载配置。"""
+	p = Path(start or Path.cwd()).resolve()
+	while p != p.parent:
+		if (p / ".env").exists():
+			return p
+		p = p.parent
+	return p
+
+
 @dataclass(frozen=True)
 class ChapterPaths:
 	"""
@@ -39,6 +49,25 @@ class ChapterPaths:
 	text_raw: Path
 	text_clean: Path
 	logs_dir: Path
+
+	# 音频与字幕（TTS/Align 产出）
+	audio_dir: Path
+	audio_shots_dir: Path
+	audio_chapter_wav: Path
+	subtitles_dir: Path
+	subtitles_srt: Path
+	subtitles_ass: Path
+	video_dir: Path
+	video_preview_mp4: Path
+
+	# Director Review 产出
+	director_dir: Path
+	director_review_json: Path
+	shotscript_directed: Path
+
+	def effective_shotscript(self) -> Path:
+		"""TTS/Align/Render 应读取的 shotscript：directed 存在则用，否则用原版。"""
+		return self.shotscript_directed if self.shotscript_directed.exists() else self.shotscript
 
 	def ensure_dirs(self) -> None:
 		"""
@@ -56,6 +85,7 @@ class ChapterPaths:
 			self.root / "video",
 			self.root / "draft" / "jianying",
 			self.root / "logs",
+			self.root / "director",
 		]
 
 		for d in dirs:
@@ -78,4 +108,15 @@ def chapter_paths(chapter_dir: str | Path) -> ChapterPaths:
 		text_raw=root / "text" / "chapter_raw.txt",
 		text_clean=root / "text" / "chapter_clean.txt",
 		logs_dir=root / "logs",
+		audio_dir=root / "audio",
+		audio_shots_dir=root / "audio" / "shots",
+		audio_chapter_wav=root / "audio" / "chapter.wav",
+		subtitles_dir=root / "subtitles",
+		subtitles_srt=root / "subtitles" / "chapter.srt",
+		subtitles_ass=root / "subtitles" / "chapter.ass",
+		video_dir=root / "video",
+		video_preview_mp4=root / "video" / "preview.mp4",
+		director_dir=root / "director",
+		director_review_json=root / "director" / "director_review.json",
+		shotscript_directed=root / "shotscript.directed.json",
 	)

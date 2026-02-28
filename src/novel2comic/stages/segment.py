@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from novel2comic.core.io import ChapterPaths
+from novel2comic.core.io import ChapterPaths, find_project_root
 from novel2comic.core.manifest import load_manifest, save_manifest
 from novel2comic.core.schemas import Shot
 from novel2comic.core.split_baseline import SplitConfig, split_baseline
@@ -68,15 +68,7 @@ class SegmentStage:
 			from novel2comic.skills.refine_shot_split.skill import RefineShotSplitSkill
 			from novel2comic.skills.refine_shot_split.schema import Constraints
 
-			# 向上查找含 .env 的项目根目录
-			project_root = Path.cwd()
-			while project_root != project_root.parent:
-				if (project_root / ".env").exists():
-					break
-				project_root = project_root.parent
-			project_root = str(project_root)
-
-			llm = load_siliconflow_client(project_root=project_root)
+			llm = load_siliconflow_client(project_root=str(find_project_root()))
 			try:
 				skill = RefineShotSplitSkill(llm)
 				c = Constraints(min_shots=60, max_shots=120, forbid_cross_scene_break=True)

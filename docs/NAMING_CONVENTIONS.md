@@ -55,12 +55,22 @@ output/<novel_id>/
 ├── ch_0001/                 # ChapterPack（单章）
 │   ├── manifest.json
 │   ├── shotscript.json
+│   ├── shotscript.directed.json   # Director Review 产出，TTS/Align 优先使用
+│   ├── director/
+│   │   └── director_review.json
 │   ├── text/
 │   │   └── chapter_clean.txt
 │   ├── audio/
+│   │   ├── chapter.wav      # 整章拼接音频
+│   │   └── shots/           # 分镜级 wav
+│   │       └── <shot_id>.wav
 │   ├── subtitles/
+│   │   ├── chapter.ass
+│   │   ├── chapter.srt
+│   │   └── align/
 │   ├── images/
 │   ├── video/
+│   │   └── preview.mp4
 │   ├── draft/
 │   └── logs/
 ├── ch_0002/
@@ -77,6 +87,11 @@ output/<novel_id>/
 | 重复章节 | ch_<no>_dup<N>.txt | ch_1097_dup1.txt |
 | 清洗文本 | chapter_clean.txt | ChapterPack/text/ 下 |
 | 镜头脚本 | shotscript.json | ChapterPack 根目录 |
+| 导演审阅脚本 | shotscript.directed.json | ChapterPack 根目录（含 gap_after_ms 等 patch） |
+| 分镜音频 | <shot_id>.wav | ch_0001_shot_0000.wav（audio/shots/ 下） |
+| 整章音频 | chapter.wav | audio/ 下 |
+| 字幕 | chapter.ass / chapter.srt | subtitles/ 下 |
+| 预览视频 | preview.mp4 | video/ 下 |
 
 ---
 

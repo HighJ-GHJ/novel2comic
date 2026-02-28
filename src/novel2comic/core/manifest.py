@@ -31,6 +31,7 @@ STAGES = [
 	"ingested",
 	"segmented",
 	"planned",
+	"directed",
 	"tts_done",
 	"aligned",
 	"images_done",
@@ -76,6 +77,14 @@ class Manifest:
 
 		self.status["last_error"] = err
 
+	def add_warning(self, msg: str) -> None:
+		"""添加警告（不阻断流程，便于诊断）。"""
+		w = self.status.setdefault("warnings", [])
+		if not isinstance(w, list):
+			w = []
+			self.status["warnings"] = w
+		w.append(msg)
+
 
 def new_manifest(novel_id: str, chapter_id: str) -> Manifest:
 	"""
@@ -112,6 +121,7 @@ def new_manifest(novel_id: str, chapter_id: str) -> Manifest:
 			"subtitles_ass": "subtitles/chapter.ass",
 			"subtitles_srt": "subtitles/chapter.srt",
 			"draft_dir": "draft/jianying/",
+			"preview_mp4": "video/preview.mp4",
 			"final_mp4": "video/final.mp4",
 		},
 		shots_index={},

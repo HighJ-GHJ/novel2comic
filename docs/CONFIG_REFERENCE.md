@@ -4,13 +4,38 @@
 
 ## 1. 环境与密钥管理
 
-### 1.1 .env（项目内 dotenv）
+### 1.1 系统依赖
+- **ffmpeg**：Render 阶段生成 preview.mp4；TTS 阶段将 SiliconFlow 返回的 MP3 转为 WAV。需在系统 PATH 中可用。
+
+### 1.2 .env（项目内 dotenv）
 本项目使用 `.env` 存储密钥与服务地址（不要求 export 环境变量）：
 
 示例：
 SILICONFLOW_API_KEY=api-key
 SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 SILICONFLOW_MODEL=deepseek-ai/DeepSeek-V3.2
+
+# TTS（plan/tts 阶段）- 默认 CosyVoice2
+# 切换说话人：修改 VOICE_NARRATOR（旁白）、VOICE_MALE（男性对话）、VOICE_FEMALE（女性对话）
+SILICONFLOW_TTS_MODEL=FunAudioLLM/CosyVoice2-0.5B
+SILICONFLOW_TTS_VOICE_NARRATOR=FunAudioLLM/CosyVoice2-0.5B:claire
+SILICONFLOW_TTS_VOICE_MALE=FunAudioLLM/CosyVoice2-0.5B:benjamin
+SILICONFLOW_TTS_VOICE_FEMALE=FunAudioLLM/CosyVoice2-0.5B:anna
+SILICONFLOW_TTS_SAMPLE_RATE=24000
+SILICONFLOW_TTS_RESPONSE_FORMAT=wav
+SILICONFLOW_TIMEOUT_S=120
+
+# style_prompt 模式：endofprompt（默认，短指令+<|endofprompt|>+正文）| none | prefix
+# 文档要求 instruction 简短（~10 字）、输入不加空格
+TTS_USE_STYLE_PROMPT=endofprompt
+
+# Director Review（plan 之后、TTS 之前）
+DIRECTOR_REVIEW_ENABLED=1
+DIRECTOR_REVIEW_MODEL=
+DIRECTOR_REVIEW_TEMPERATURE=0.2
+DIRECTOR_REVIEW_APPLY_PATCH=1
+
+**注意**：API 可能返回 MP3，代码在 `core/audio_utils._ensure_wav` 中通过 ffmpeg 自动转为 WAV。
 
 说明：
 - 大多数 dotenv 解析器支持 `KEY=value`，不需要引号
@@ -67,6 +92,11 @@ python scripts/normalize_to_utf8.py --in_path /path/to/raw.txt --out_dir output/
 - 前言/简介/广告等无章节头内容输出为 front_matter.txt
 - 生成 chapters_index.json（按章节号排序）
 
+参数：
+- `--in_path`：输入 txt（UTF-8）
+- `--out_dir`：输出根目录（默认 output）
+- `--novel_id`：小说 ID，输出到 output/<novel_id>/chapters/（默认 novel_demo）
+
 
 ### 3.3 scripts/normalize_chapter_indent.py
 用途：
@@ -83,6 +113,19 @@ python scripts/normalize_to_utf8.py --in_path /path/to/raw.txt --out_dir output/
 - baseline split -> base_shots
 - 调用 SiliconFlow LLM -> 输出 patch/refined shots
 - 打印统计与预览，便于 prompt/参数迭代
+
+### 3.5 scripts/smoke_audio_pipeline.py（冒烟测试）
+用途：
+- 对 ChapterPack 跑 `novel2comic run --until render`
+- 临时截断 shotscript 为前 N 个 shots（`--limit_shots`），跑完后恢复
+- 检查 chapter.wav、chapter.ass、chapter.srt、preview.mp4 是否存在
+
+示例：
+```bash
+python scripts/smoke_audio_pipeline.py --chapter_dir output/xuanjianxianzu/ch_0001 --limit_shots 3
+```
+
+前置条件：`.env` 配置 SILICONFLOW_API_KEY、SILICONFLOW_BASE_URL；系统安装 ffmpeg。
 
 
 ## 4. 输出目录与命名约定
@@ -106,15 +149,25 @@ output/<novel_id>/<chapter_id>/
   manifest.json
   shotscript.json
   text/
+    chapter_clean.txt
   audio/
+    chapter.wav          # 整章拼接音频（TTS 阶段产出）
+    shots/               # 分镜级 wav
+      <shot_id>.wav      # 如 ch_0001_shot_0000.wav
   subtitles/
+    chapter.ass          # ASS 字幕（Align 阶段产出）
+    chapter.srt          # SRT 字幕
+    align/
   images/
+    layers/
   video/
+    preview.mp4          # 预览视频（Render 阶段产出）
   draft/
   logs/
 
 说明：
 - `chapter_id`：章节标识（如 ch_0001），与 chapters/ 下文件名对应
+- 音频路径由 `core/io.ChapterPaths` 定义
 
 
 ## 5. 渲染与交付关键参数（待落地但需预留）

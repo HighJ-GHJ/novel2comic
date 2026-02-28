@@ -25,6 +25,7 @@ STAGES = [
 	"ingest",
 	"segment",
 	"plan",
+	"director_review",
 	"tts",
 	"align",
 	"image",
@@ -139,3 +140,7 @@ def main(argv=None) -> None:
 	if args.cmd == "run":
 		cmd_run(args.chapter_dir, args.until, novel_id=args.novel_id)
 		return
+
+
+if __name__ == "__main__":
+	main()
