@@ -1,0 +1,25 @@
+# 密钥（必须忽略）
+.env
+
+# 输出与数据（体积大，用户本地生成）
+output/
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# 测试与 IDE
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# 系统
+.DS_Store
+*.swp
