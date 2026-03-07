@@ -2,195 +2,260 @@
 
 > 目录与命名约定详见 [NAMING_CONVENTIONS.md](./NAMING_CONVENTIONS.md)。
 
-## 1. 环境与密钥管理
+## 1. 依赖与安装入口
 
-### 1.1 系统依赖
-- **ffmpeg**：Render 阶段生成 preview.mp4；TTS 阶段将 SiliconFlow 返回的 MP3 转为 WAV。需在系统 PATH 中可用。
+当前仓库有两种依赖安装入口：
 
-### 1.2 .env（项目内 dotenv）
-本项目使用 `.env` 存储密钥与服务地址（不要求 export 环境变量）：
+### 1.1 项目标准方式
 
-示例：
+```bash
+pip install -e ".[dev]"
+```
+
+适用场景：
+- 本地开发
+- 需要 `pytest`
+- 希望直接以 editable 方式安装 `novel2comic`
+
+### 1.2 运行依赖快速安装
+
+```bash
+pip install -r requirements.txt
+```
+
+适用场景：
+- 只想快速安装运行依赖
+- 不需要开发依赖
+
+### 1.3 系统依赖
+
+- **ffmpeg**：Render 阶段生成 `preview.mp4`；TTS 阶段把 MP3 转为 WAV
+- 建议通过 conda 或系统包管理器安装，并保证 `ffmpeg` 在 PATH 中可用
+
+---
+
+## 2. 配置体系概览
+
+可变参数按阶段 / 服务分类到 `configs/*.yaml`，由 `core/config_loader.py` 统一加载。优先级：
+
+**环境变量 > YAML > 代码默认**
+
+| 文件 | 说明 |
+|------|------|
+| `siliconflow.yaml` | base_url、timeout_s、llm / tts / image / vlm 默认模型 |
+| `stage_segment.yaml` | baseline split 与 refine 参数 |
+| `stage_director_review.yaml` | 导演审阅开关与模型参数 |
+| `stage_anchors.yaml` | 角色锚点 / 风格锚点参数 |
+| `stage_image.yaml` | 图像生成参数与 VLM review 开关 |
+| `stage_tts.yaml` | TTS 风格提示与 instruction 长度限制 |
+
+密钥（如 `SILICONFLOW_API_KEY`）必须放在 `.env` 或系统环境变量中，不写进 YAML。
+
+---
+
+## 3. 项目根目录与 .env 解析
+
+这是本次可移植化改造的关键规则。
+
+### 3.1 项目根目录自动解析
+
+`core/io.find_project_root()` 会按以下顺序解析项目根目录：
+1. `NOVEL2COMIC_PROJECT_ROOT`
+2. 调用方显式传入的起点路径
+3. 当前模块位置
+4. 当前工作目录
+
+识别项目根目录的标记：
+- `pyproject.toml`
+- `.git`
+- `src/novel2comic/`
+
+这意味着：
+- 运行时不再依赖某个硬编码磁盘路径
+- 也不再依赖“.env 一定存在”才能找到项目根目录
+
+### 3.2 .env 解析
+
+`core/io.find_env_file()` 规则：
+- 优先 `NOVEL2COMIC_ENV_FILE`
+- 否则使用 `<project_root>/.env`
+
+### 3.3 建议写法
+
+本地默认：
+
+```bash
+NOVEL2COMIC_PROJECT_ROOT=E:\novel2comic
+NOVEL2COMIC_ENV_FILE=E:\novel2comic\.env
+```
+
+服务器默认：
+
+```bash
+NOVEL2COMIC_PROJECT_ROOT=/home/yourname/novel2comic
+NOVEL2COMIC_ENV_FILE=/home/yourname/novel2comic/.env
+```
+
+通常不必显式设置；只有在以下场景建议使用：
+- 从仓库外部目录调用脚本
+- 同一台机器上维护多个 checkout
+- 本地与服务器使用不同的密钥文件路径
+
+---
+
+## 4. .env 示例
+
+```dotenv
+# 必需
 SILICONFLOW_API_KEY=api-key
-SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
-SILICONFLOW_MODEL=deepseek-ai/DeepSeek-V3.2
 
-# TTS（plan/tts 阶段）- 默认 CosyVoice2
-# 切换说话人：修改 VOICE_NARRATOR（旁白）、VOICE_MALE（男性对话）、VOICE_FEMALE（女性对话）
+# 可选服务覆盖
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+SILICONFLOW_TIMEOUT_S=120
+SILICONFLOW_MODEL=deepseek-ai/DeepSeek-V3.2
 SILICONFLOW_TTS_MODEL=FunAudioLLM/CosyVoice2-0.5B
 SILICONFLOW_TTS_VOICE_NARRATOR=FunAudioLLM/CosyVoice2-0.5B:claire
 SILICONFLOW_TTS_VOICE_MALE=FunAudioLLM/CosyVoice2-0.5B:benjamin
 SILICONFLOW_TTS_VOICE_FEMALE=FunAudioLLM/CosyVoice2-0.5B:anna
-SILICONFLOW_TTS_SAMPLE_RATE=24000
-SILICONFLOW_TTS_RESPONSE_FORMAT=wav
-SILICONFLOW_TIMEOUT_S=120
+VLM_MODEL=Qwen/Qwen2.5-VL-32B-Instruct
 
-# style_prompt 模式：endofprompt（默认，短指令+<|endofprompt|>+正文）| none | prefix
-# 文档要求 instruction 简短（~10 字）、输入不加空格
-TTS_USE_STYLE_PROMPT=endofprompt
-
-# Director Review（plan 之后、TTS 之前）
+# 阶段级覆盖
 DIRECTOR_REVIEW_ENABLED=1
-DIRECTOR_REVIEW_MODEL=
 DIRECTOR_REVIEW_TEMPERATURE=0.2
-DIRECTOR_REVIEW_APPLY_PATCH=1
+TTS_USE_STYLE_PROMPT=endofprompt
+IMAGE_MODE=draft
+IMAGE_SIZE=1664x928
+ANCHORS_ENABLED=1
 
-**注意**：API 可能返回 MP3，代码在 `core/audio_utils._ensure_wav` 中通过 ffmpeg 自动转为 WAV。
-
-说明：
-- 大多数 dotenv 解析器支持 `KEY=value`，不需要引号
-- 只有当 value 含空格/特殊字符时，才建议加引号
-- `.env` 不应提交到 git（建议在 .gitignore 中忽略）
-
-
-## 2. 关键参数（MVP 推荐）
-
-### 2.1 Baseline split（规则粗切）
-目的：把章节文本先粗切成相对稳定的片段，供 LLM refine。
-- min_chars：最小片段阈值（过短不切）
-- soft_target：期望片段长度（尽量接近）
-- hard_cut：硬上限（超过则强制切）
-
-典型用途：
-- 控制 LLM 输入长度，避免超长段落拖垮 refine
-- 控制 shot 粒度，避免后续 TTS/字幕过长不适合观看
-
-### 2.2 Refine（refine_shot_split）约束
-目的：让 LLM 在语义理解下矫正切分边界，并输出 patch。
-- min_shots / max_shots：每章 shot 数约束（当前目标 60–120）
-- patch_only：强制输出 patch，不允许整章重写
-- keep_raw_alignment：保留 raw_text 片段可追溯性（避免编造）
-
-建议：
-- 小说每章几千字，真实视角切换不多
-- 更合理的流程：代码粗切 -> LLM 语义修正 -> patch 输出
-
-
-## 3. 文件与脚本清单（当前已用到）
-
-### 3.1 scripts/normalize_to_utf8.py（建议保留）
-用途：
-- 把任意编码 txt 标准化为 UTF-8
-- 推荐通过 uchardet 自动识别编码（已验证可识别 GB18030）
-
-输入/输出（路径任意，建议与 output 统一）：
-- 输入：任意 txt 路径
-- 输出：`--out_dir` 指定，建议 `output/<novel_id>/utf8/`
-
-示例：
-```bash
-python scripts/normalize_to_utf8.py --in_path /path/to/raw.txt --out_dir output/xuanjianxianzu/utf8
+# 路径覆盖（通常不需要）
+NOVEL2COMIC_PROJECT_ROOT=E:\novel2comic
+NOVEL2COMIC_ENV_FILE=E:\novel2comic\.env
 ```
 
+说明：
+- 大多数 dotenv 解析器支持 `KEY=value`
+- `.env` 不应提交到 git
 
-### 3.2 scripts/split_novel_to_chapters.py
-用途：
-- 整本小说 -> 按章节标题切分成多个章节文件
-- 章节命名必须按章节号作为主键：
-  - 第一章 -> ch_0001.txt
-  - 第一千零九十七章 -> ch_1097.txt
-- 前言/简介/广告等无章节头内容输出为 front_matter.txt
-- 生成 chapters_index.json（按章节号排序）
+---
 
-参数：
-- `--in_path`：输入 txt（UTF-8）
-- `--out_dir`：输出根目录（默认 output）
-- `--novel_id`：小说 ID，输出到 output/<novel_id>/chapters/（默认 novel_demo）
+## 5. 阶段配置重点
 
+### 5.1 Segment
 
-### 3.3 scripts/normalize_chapter_indent.py
-用途：
-- 修复章节文本段首缩进不一致问题（TAB/全角空格混杂）
-规则（当前约定）：
-- 去掉行首 TAB
-- 正文段首统一两个全角空格（\u3000\u3000）
-- 章节标题行不缩进
+配置文件：`configs/stage_segment.yaml`
 
+关键字段：
+- `split_baseline.min_chars`
+- `split_baseline.soft_target`
+- `split_baseline.hard_cut`
+- `refine_shot_split.min_shots`
+- `refine_shot_split.max_shots`
 
-### 3.4 scripts/debug_refine_split.py（调试用）
-用途：
-- 读入单章文本
-- baseline split -> base_shots
-- 调用 SiliconFlow LLM -> 输出 patch/refined shots
-- 打印统计与预览，便于 prompt/参数迭代
+### 5.2 Director Review
 
-### 3.5 scripts/smoke_audio_pipeline.py（冒烟测试）
-用途：
-- 对 ChapterPack 跑 `novel2comic run --until render`
-- 临时截断 shotscript 为前 N 个 shots（`--limit_shots`），跑完后恢复
-- 检查 chapter.wav、chapter.ass、chapter.srt、preview.mp4 是否存在
+配置文件：`configs/stage_director_review.yaml`
 
-示例：
-```bash
-python scripts/smoke_audio_pipeline.py --chapter_dir output/xuanjianxianzu/ch_0001 --limit_shots 3
+关键字段：
+- `enabled`
+- `apply_patch`
+- `model`
+- `temperature`
+
+### 5.3 Anchors
+
+配置文件：`configs/stage_anchors.yaml`
+
+关键字段：
+- `enabled`
+- `topk_chars`
+- `default_gender`
+- `image_size`
+- `steps`
+- `cfg`
+
+### 5.4 Image
+
+配置文件：`configs/stage_image.yaml`
+
+关键字段：
+- `mode`
+- `provider`
+- `image_size`
+- `steps`
+- `cfg`
+- `max_attempts`
+- `chain_max_hops`
+- `use_vlm_review`
+- `review_max_attempts`
+
+### 5.5 TTS
+
+配置文件：`configs/stage_tts.yaml`
+
+关键字段：
+- `instruction_max_len`
+- `use_style_prompt`
+
+---
+
+## 6. 运行时调用关系
+
+当前与配置 / 路径强相关的调用链路如下：
+
+- `core/config_loader.py`：负责读取 `configs/*.yaml`
+- `providers/llm/siliconflow_client.py`：读取项目根和 `.env`
+- `providers/tts/siliconflow_tts.py`：读取项目根和 `.env`
+- `providers/image/image_qwen.py`：读取项目根和 `.env`
+- `providers/image/image_flux.py`：读取项目根和 `.env`
+- `providers/vlm/siliconflow_vlm.py`：读取项目根和 `.env`
+- `scripts/smoke_full_chain.py`：通过 `find_project_root()` 运行整个链路
+
+统一后带来的效果：
+- 不再需要把脚本放在固定目录执行
+- 不再要求本地和服务器保持同样的绝对路径
+- provider 与 stage 对路径解析的认知一致
+
+---
+
+## 7. 输出目录约定
+
+统一使用：
+
+```text
+output/<novel_id>/
+  chapters/
+  <chapter_id>/
 ```
 
-前置条件：`.env` 配置 SILICONFLOW_API_KEY、SILICONFLOW_BASE_URL；系统安装 ffmpeg。
+单章 ChapterPack 典型结构：
 
-
-## 4. 输出目录与命名约定
-
-统一使用 `output/<novel_id>/` 作为单本小说的输出根目录。
-
-### 4.1 章节切分输出
-output/<novel_id>/chapters/
-  front_matter.txt
-  ch_0001.txt
-  ch_0002.txt
-  ...
-  chapters_index.json
-
-说明：
-- `novel_id`：小说唯一标识（如 xuanjianxianzu）
-- chapters_index.json 记录每个章节文件的章节号/标题/路径/行数等
-
-### 4.2 ChapterPack（pipeline 输出）
+```text
 output/<novel_id>/<chapter_id>/
   manifest.json
   shotscript.json
-  text/
-    chapter_clean.txt
-  audio/
-    chapter.wav          # 整章拼接音频（TTS 阶段产出）
-    shots/               # 分镜级 wav
-      <shot_id>.wav      # 如 ch_0001_shot_0000.wav
-  subtitles/
-    chapter.ass          # ASS 字幕（Align 阶段产出）
-    chapter.srt          # SRT 字幕
-    align/
-  images/
-    layers/
-  video/
-    preview.mp4          # 预览视频（Render 阶段产出）
-  draft/
-  logs/
+  shotscript.directed.json
+  text/chapter_clean.txt
+  audio/chapter.wav
+  audio/shots/<shot_id>.wav
+  subtitles/chapter.ass
+  subtitles/chapter.srt
+  images/anchors/
+  images/shots/
+  video/preview.mp4
+```
 
-说明：
-- `chapter_id`：章节标识（如 ch_0001），与 chapters/ 下文件名对应
-- 音频路径由 `core/io.ChapterPaths` 定义
+这些路径统一由 `core/io.ChapterPaths` 维护，不应在业务代码中手写散落字符串。
 
+---
 
-## 5. 渲染与交付关键参数（待落地但需预留）
+## 8. 多机器开发建议
 
-### 5.1 render_profile（建议字段）
-- timebase_ms：时间基准（毫秒）
-- fps：输出帧率（24/30）
-- resolution：最终 1920×1080（MVP 可先 1280×720）
-- duration_policy：tts_driven（以音频真实时长决定镜头长度）
-- motion_defaults：Ken Burns 缩放/平移参数范围
+- 本地和服务器都以仓库根目录为工作副本，不共享绝对路径假设
+- 每台机器维护自己的 `.env`
+- 如需统一脚本入口，优先用 `python -m novel2comic ...`
+- 如需从仓库外部调用脚本，设置 `NOVEL2COMIC_PROJECT_ROOT`
+- 不要在代码里写死 `E:\...`、`C:\...`、`/home/...` 这类机器专属路径
 
-### 5.2 Draft（剪映/CapCut）导出参数
-- timeline_unit：以 ms 为主
-- materials：图片/音频/字幕素材路径相对 ChapterPack
-- tracks：视频轨/音频轨/字幕轨
-- subtitle_style：ASS 模板或 Draft 内样式映射
+---
 
-
-## 6. 已知输入风险与建议策略
-
-- txt 可能混入后期章节/重复内容/广告块
-  - 建议在 split 阶段支持按章节号过滤（min_no/max_no）
-- 不同站点 txt 的章节头格式不同
-  - 建议对章节标题正则做可配置（configs/）
-- 为保证可追溯，raw_text 片段应保持 substring 可定位
-  - refine 输出 patch 时必须避免“编造与大改写”
+*最后更新：2026-03-07*

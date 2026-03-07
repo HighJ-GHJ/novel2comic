@@ -32,9 +32,9 @@ STAGES = [
 	"segmented",
 	"planned",
 	"directed",
+	"images_done",
 	"tts_done",
 	"aligned",
-	"images_done",
 	"rendered",
 	"exported",
 ]
@@ -52,6 +52,7 @@ class Manifest:
 	providers: Dict[str, Any]
 	artifacts: Dict[str, Any]
 	shots_index: Dict[str, Any]
+	images_index: Dict[str, Any]
 
 	@property
 	def stage(self) -> str:
@@ -120,11 +121,14 @@ def new_manifest(novel_id: str, chapter_id: str) -> Manifest:
 			"audio_chapter_wav": "audio/chapter.wav",
 			"subtitles_ass": "subtitles/chapter.ass",
 			"subtitles_srt": "subtitles/chapter.srt",
+			"shots_images_dir": "images/shots/",
+			"anchors_dir": "images/anchors/",
 			"draft_dir": "draft/jianying/",
 			"preview_mp4": "video/preview.mp4",
 			"final_mp4": "video/final.mp4",
 		},
 		shots_index={},
+		images_index={},
 	)
 
 
@@ -146,6 +150,7 @@ def load_manifest(path: Path) -> Manifest:
 		providers=data.get("providers", {}),
 		artifacts=data.get("artifacts", {}),
 		shots_index=data.get("shots_index", {}),
+		images_index=data.get("images_index", {}),
 	)
 
 
@@ -161,6 +166,7 @@ def save_manifest(path: Path, m: Manifest) -> None:
 		"providers": m.providers,
 		"artifacts": m.artifacts,
 		"shots_index": m.shots_index,
+		"images_index": m.images_index,
 	}
 
 	path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

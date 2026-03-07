@@ -113,8 +113,8 @@ class TTSStage:
 			raise ValueError("shotscript has no shots")
 
 		m = load_manifest(paths.manifest)
-		if m.stage not in ("planned", "directed", "tts_done", "aligned", "rendered"):
-			raise ValueError(f"TTS requires planned or directed stage, got {m.stage}")
+		if m.stage not in ("planned", "directed", "images_done", "tts_done", "aligned", "rendered"):
+			raise ValueError(f"TTS requires planned/directed/images_done, got {m.stage}")
 
 		paths.audio_shots_dir.mkdir(parents=True, exist_ok=True)
 

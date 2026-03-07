@@ -1,0 +1,17 @@
+# Anchors 阶段：角色锚点 + 风格锚点
+# 对应 stages/anchors_generate
+# 必须在 image 阶段之前运行（directed 之后）
+
+enabled: true
+topk_chars: 8
+
+# 角色无 description 时的默认性别（避免模型误判，如陆江仙→女性）
+default_gender: "男性"
+
+# 生成参数（16:9 必须，Edit 跟随 ref 尺寸）
+image_size: "1664x928"
+steps: 50
+cfg: 4.0
+
+# 缺失时是否自动补齐（image_generate 内）
+auto_build_on_missing: false

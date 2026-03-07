@@ -20,6 +20,9 @@ try:
 except Exception:
 	load_dotenv = None
 
+from novel2comic.core.config_loader import get_siliconflow, get_stage_config
+from novel2comic.core.io import find_env_file, find_project_root
+
 # CosyVoice2 默认
 DEFAULT_MODEL = "FunAudioLLM/CosyVoice2-0.5B"
 DEFAULT_VOICE_NARRATOR = "FunAudioLLM/CosyVoice2-0.5B:claire"
@@ -29,8 +32,8 @@ DEFAULT_VOICE_FEMALE = "FunAudioLLM/CosyVoice2-0.5B:anna"
 # CosyVoice2 风格分隔符
 TTS_STYLE_ENDOPROMPT = "<|endofprompt|>"
 
-# instruction 长度安全阈值，超长强制 endofprompt
-INSTRUCTION_MAX_LEN = int(os.environ.get("TTS_INSTRUCTION_MAX_LEN", "12"))
+# instruction 长度安全阈值（兜底），超长强制 endofprompt；实际值由 configs/stage_tts.yaml 提供
+_DEFAULT_INSTRUCTION_MAX_LEN = 12
 
 
 def _is_cosyvoice2_model(model: str) -> bool:
@@ -44,7 +47,7 @@ def build_input_text(
 	mode: str,
 	*,
 	model: str = "",
-	instruction_max_len: int = INSTRUCTION_MAX_LEN,
+	instruction_max_len: int = _DEFAULT_INSTRUCTION_MAX_LEN,
 ) -> tuple[str, str]:
 	"""
 	构建 TTS input 字符串。
@@ -89,7 +92,7 @@ class SiliconFlowTTSConfig:
 def _load_dotenv_if_present(project_root: Path) -> None:
 	if load_dotenv is None:
 		return
-	env_path = project_root / ".env"
+	env_path = find_env_file(project_root)
 	if env_path.exists():
 		load_dotenv(dotenv_path=str(env_path), override=False)
 
@@ -106,26 +109,34 @@ def load_siliconflow_tts(
 	response_format: Optional[str] = None,
 	timeout_s: Optional[float] = None,
 ) -> "SiliconFlowTTSClient":
-	root = Path(project_root or os.getcwd()).resolve()
+	root = find_project_root(project_root or __file__)
 	_load_dotenv_if_present(root)
 
 	key = (api_key or os.environ.get("SILICONFLOW_API_KEY", "")).strip()
 	if not key:
 		raise ValueError("Missing SILICONFLOW_API_KEY")
 
-	url = (base_url or os.environ.get("SILICONFLOW_BASE_URL", "")).strip() or "https://api.siliconflow.cn/v1"
-	m = (model or os.environ.get("SILICONFLOW_TTS_MODEL", "")).strip() or DEFAULT_MODEL
-	vn = (voice_narrator or os.environ.get("SILICONFLOW_TTS_VOICE_NARRATOR", "")).strip() or DEFAULT_VOICE_NARRATOR
-	vm = (voice_male or os.environ.get("SILICONFLOW_TTS_VOICE_MALE", "")).strip() or DEFAULT_VOICE_MALE
-	vf = (voice_female or os.environ.get("SILICONFLOW_TTS_VOICE_FEMALE", "")).strip() or DEFAULT_VOICE_FEMALE
-	sr = int(sample_rate or os.environ.get("SILICONFLOW_TTS_SAMPLE_RATE", "24000"))
-	fmt = (response_format or os.environ.get("SILICONFLOW_TTS_RESPONSE_FORMAT", "")).strip() or "wav"
-	t = float(timeout_s or os.environ.get("SILICONFLOW_TIMEOUT_S", "120"))
+	sf = get_siliconflow()
+	tts_cfg = sf.get("tts") or {}
+	url = (base_url or os.environ.get("SILICONFLOW_BASE_URL", "") or sf.get("base_url", "") or "").strip() or "https://api.siliconflow.cn/v1"
+	t = float(timeout_s or os.environ.get("SILICONFLOW_TIMEOUT_S", "") or sf.get("timeout_s", "") or 120)
+	m = (model or os.environ.get("SILICONFLOW_TTS_MODEL", "") or tts_cfg.get("model", "") or "").strip() or DEFAULT_MODEL
+	vn = (voice_narrator or os.environ.get("SILICONFLOW_TTS_VOICE_NARRATOR", "") or tts_cfg.get("voice_narrator", "") or "").strip() or DEFAULT_VOICE_NARRATOR
+	vm = (voice_male or os.environ.get("SILICONFLOW_TTS_VOICE_MALE", "") or tts_cfg.get("voice_male", "") or "").strip() or DEFAULT_VOICE_MALE
+	vf = (voice_female or os.environ.get("SILICONFLOW_TTS_VOICE_FEMALE", "") or tts_cfg.get("voice_female", "") or "").strip() or DEFAULT_VOICE_FEMALE
+	sr = int(sample_rate or os.environ.get("SILICONFLOW_TTS_SAMPLE_RATE", "") or tts_cfg.get("sample_rate", "") or 24000)
+	fmt = (response_format or os.environ.get("SILICONFLOW_TTS_RESPONSE_FORMAT", "") or tts_cfg.get("response_format", "") or "").strip() or "wav"
 
 	cfg = SiliconFlowTTSConfig(
-		api_key=key, base_url=url, model=m,
-		voice_narrator=vn, voice_male=vm, voice_female=vf,
-		sample_rate=sr, response_format=fmt, timeout_s=t,
+		api_key=key,
+		base_url=url,
+		model=m,
+		voice_narrator=vn,
+		voice_male=vm,
+		voice_female=vf,
+		sample_rate=sr,
+		response_format=fmt,
+		timeout_s=t,
 	)
 	return SiliconFlowTTSClient(cfg)
 
@@ -173,12 +184,15 @@ class SiliconFlowTTSClient:
 		CosyVoice2：input = style_prompt + <|endofprompt|> + text。
 		per-call voice 覆盖默认。
 		"""
-		use_style = (os.environ.get("TTS_USE_STYLE_PROMPT", "endofprompt") or "endofprompt").strip().lower()
+		tts_stage = get_stage_config("tts")
+		use_style = (tts_stage.get("use_style_prompt") or "endofprompt").strip().lower()
+		instruction_max_len = int(tts_stage.get("instruction_max_len") or _DEFAULT_INSTRUCTION_MAX_LEN)
 		input_text, _ = build_input_text(
 			text,
 			style_prompt,
 			use_style,
 			model=self.cfg.model,
+			instruction_max_len=instruction_max_len,
 		)
 
 		v = voice or self.cfg.voice_narrator

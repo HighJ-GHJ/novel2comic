@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from novel2comic.core.config_loader import get_stage_config
 from novel2comic.core.io import ChapterPaths, find_project_root
 from novel2comic.core.manifest import load_manifest, save_manifest
 from novel2comic.core.schemas import Shot
@@ -54,8 +55,14 @@ class SegmentStage:
 
 		chapter_text = paths.text_clean.read_text(encoding="utf-8")
 
-		# 1) baseline split
-		cfg = SplitConfig(min_chars=80, soft_target=140, hard_cut=220)
+		# 1) baseline split（参数来自 configs/stage_segment.yaml）
+		seg_cfg = get_stage_config("segment")
+		split_bl = seg_cfg.get("split_baseline") or {}
+		cfg = SplitConfig(
+			min_chars=int(split_bl.get("min_chars", 80)),
+			soft_target=int(split_bl.get("soft_target", 140)),
+			hard_cut=int(split_bl.get("hard_cut", 220)),
+		)
 		base_shots = split_baseline(chapter_text, cfg)
 
 		# 2) refine（LLM 可用时）；失败则回退 baseline
@@ -71,7 +78,12 @@ class SegmentStage:
 			llm = load_siliconflow_client(project_root=str(find_project_root()))
 			try:
 				skill = RefineShotSplitSkill(llm)
-				c = Constraints(min_shots=60, max_shots=120, forbid_cross_scene_break=True)
+				ref_cfg = seg_cfg.get("refine_shot_split") or {}
+				c = Constraints(
+					min_shots=int(ref_cfg.get("min_shots", 60)),
+					max_shots=int(ref_cfg.get("max_shots", 120)),
+					forbid_cross_scene_break=bool(ref_cfg.get("forbid_cross_scene_break", True)),
+				)
 				result = skill.run(ctx.chapter_id, base_shots, c)
 				shots = result.refined_shots
 				if not result.used_fallback:

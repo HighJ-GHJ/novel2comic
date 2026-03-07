@@ -1,0 +1,13 @@
+# Segment 阶段：规则粗切 + refine
+# 对应 core/split_baseline、skills/refine_shot_split
+
+split_baseline:
+  min_chars: 80
+  soft_target: 140
+  hard_cut: 220
+
+refine_shot_split:
+  enabled: true
+  min_shots: 60
+  max_shots: 120
+  forbid_cross_scene_break: true

@@ -33,6 +33,9 @@ try:
 except Exception:  # pragma: no cover
 	load_dotenv = None
 
+from novel2comic.core.config_loader import get_siliconflow
+from novel2comic.core.io import find_env_file, find_project_root
+
 
 @dataclass
 class SiliconFlowConfig:
@@ -103,7 +106,7 @@ def _load_dotenv_if_present(project_root: Path) -> None:
 	if load_dotenv is None:
 		return
 
-	env_path = project_root / ".env"
+	env_path = find_env_file(project_root)
 	if env_path.exists():
 		load_dotenv(dotenv_path=str(env_path), override=False)
 
@@ -121,16 +124,18 @@ def load_siliconflow_client(
 	你现在的诉求：不要用 export 环境变量，而是用项目内 .env 存储。
 	所以我们默认会从 project_root/.env 读取（project_root 缺省为当前工作目录）。
 	"""
-	root = Path(project_root or os.getcwd()).resolve()
+	root = find_project_root(project_root or __file__)
 	_load_dotenv_if_present(root)
 
 	key = (api_key or os.environ.get("SILICONFLOW_API_KEY", "")).strip()
 	if not key:
 		raise ValueError("Missing SILICONFLOW_API_KEY (from .env or env)")
 
-	url = (base_url or os.environ.get("SILICONFLOW_BASE_URL", "")).strip() or "https://api.siliconflow.cn/v1"
-	m = (model or os.environ.get("SILICONFLOW_MODEL", "")).strip() or "deepseek-ai/DeepSeek-V3.2"
-	t = float(timeout_s or os.environ.get("SILICONFLOW_TIMEOUT_S", "60").strip() or 60)
+	sf = get_siliconflow()
+	llm_cfg = sf.get("llm") or {}
+	url = (base_url or os.environ.get("SILICONFLOW_BASE_URL", "") or sf.get("base_url", "") or "").strip() or "https://api.siliconflow.cn/v1"
+	m = (model or os.environ.get("SILICONFLOW_MODEL", "") or llm_cfg.get("model", "") or "").strip() or "deepseek-ai/DeepSeek-V3.2"
+	t = float(timeout_s or os.environ.get("SILICONFLOW_TIMEOUT_S", "") or sf.get("timeout_s", "") or 60)
 
 	cfg = SiliconFlowConfig(api_key=key, base_url=url, model=m, timeout_s=t)
 	return SiliconFlowLLMClient(cfg)

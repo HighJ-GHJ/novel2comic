@@ -10,7 +10,7 @@ import pytest
 
 from novel2comic.core.schemas import Shot
 from novel2comic.core.split_baseline import SplitConfig, split_baseline
-from novel2comic.core.io import chapter_paths
+from novel2comic.core.io import chapter_paths, find_env_file, find_project_root
 from novel2comic.core.manifest import new_manifest, load_manifest, save_manifest
 
 
@@ -53,3 +53,29 @@ class TestManifest:
 			assert loaded.meta["novel_id"] == "novel_1"
 			assert loaded.meta["chapter_id"] == "ch_0001"
 			assert loaded.stage == "empty"
+
+class TestPathResolution:
+	def test_find_project_root_without_dotenv(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+		root = tmp_path / "portable_repo"
+		(root / "src" / "novel2comic").mkdir(parents=True)
+		(root / "pyproject.toml").write_text("[project]\nname = \"portable\"\n", encoding="utf-8")
+		nested = root / "output" / "demo" / "ch_0001"
+		nested.mkdir(parents=True)
+
+		monkeypatch.delenv("NOVEL2COMIC_PROJECT_ROOT", raising=False)
+		monkeypatch.delenv("NOVEL2COMIC_ENV_FILE", raising=False)
+
+		assert find_project_root(nested) == root.resolve()
+		assert find_env_file(nested) == (root / ".env").resolve()
+
+	def test_env_override_wins(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+		override_root = tmp_path / "server_checkout"
+		override_root.mkdir()
+		override_env = tmp_path / "shared" / "novel2comic.local.env"
+		override_env.parent.mkdir(parents=True)
+
+		monkeypatch.setenv("NOVEL2COMIC_PROJECT_ROOT", str(override_root))
+		monkeypatch.setenv("NOVEL2COMIC_ENV_FILE", str(override_env))
+
+		assert find_project_root(tmp_path / "elsewhere") == override_root.resolve()
+		assert find_env_file(tmp_path / "elsewhere") == override_env.resolve()

@@ -26,6 +26,70 @@
 
 ---
 
+
+## [2026-03-08] Windows 本地全链路验证记录
+
+### 背景 / 动机
+
+- 项目已经从服务器迁移到本地 Windows 开发，需要确认路径去硬编码后的真实运行情况
+- 需要把“已经验证到哪一步”和“还卡在哪个点”固化到文档里，方便后续续做
+
+### 变更内容
+
+- 基于 `output/xuanjianxianzu/chapters/ch_0002.txt` 新建了独立验证目录：`output/validation_20260307_run1/`
+- 在 `output/validation_20260307_run1/ch_0001` 上完成了一次 3-shot 本地冒烟验证
+- 已实际跑通：`prepare -> segment -> plan -> director_review -> anchors -> image -> tts -> align`
+- 已生成 `shotscript.json`、`shotscript.directed.json`、`audio/chapter.wav`、`subtitles/chapter.ass`、`subtitles/chapter.srt`、`images/anchors/*`、`images/shots/*`
+- `image` 阶段记录到 1 个质量告警：`qc_fail:size_mismatch:1368x760_expected_1664x928`
+- `render` 阶段失败，当前结论是 Windows 本地 `ffmpeg` 可执行文件的调用路径在不同 shell / 子进程环境中不一致
+- 已确认用户当前 PowerShell 中可用的 `ffmpeg.exe` 路径：`C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe`
+- 同步更新 `docs/PROJECT_STATUS.md`，把今天的验证结果、阻塞点和下次继续位置写入项目状态文档
+
+### 影响范围
+
+- 当前可以确认：路径去硬编码改造已经足够支撑 Windows 本地跑通大部分主链路
+- 当前不能确认：`render` 在本地 Windows 的最终稳定性，因为 `preview.mp4` 仍未产出
+- 后续排查范围已经收缩到 `render.py`、`ffmpeg` 可执行路径和 Windows 子进程环境继承
+
+### 后续待办
+
+- 直接使用已确认的 `ffmpeg.exe` 路径：`C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe`
+- 基于 `output/validation_20260307_run1/ch_0001` 从 `render` 阶段单独补跑
+- 评估是否要给 `render` 增加显式 `ffmpeg` 路径配置或预检查
+
+---
+
+## [2026-03-07] 项目根目录自动解析 + requirements.txt
+
+### 背景 / 动机
+
+- 这是本次可移植化改造的关键规则。
+
+### 变更内容
+
+- 运行时不再依赖某个硬编码磁盘路径
+- 也不再依赖“.env 一定存在”才能找到项目根目录
+- `core/io.find_project_root()`
+- `core/io.find_env_file()`
+- `pip install -r requirements.txt`
+- `core/io.py`, `core/config_loader.py`
+- `providers/llm/siliconflow_client.py`, `providers/tts/siliconflow_tts.py`
+- `providers/image/image_qwen.py`, `providers/image/image_flux.py`, `providers/vlm/siliconflow_vlm.py`
+- `scripts/smoke_full_chain.py`, `tests/test_core.py`, `requirements.txt`
+- `README.md`, `configs/README.md`, `docs/ARCHITECTURE.md`, `docs/CODE_STRUCTURE.md`, `docs/CONFIG_REFERENCE.md`
+
+### 影响范围
+
+- ChapterPack 内路径必须可迁移，不写死机器绝对路径
+- 当前代码以 `pipeline/orchestrator.STAGE_ORDER` 为准，阶段顺序是：
+- `ingest -> segment -> plan -> director_review -> anchors -> image -> tts -> align -> render -> export`
+
+### 后续待办
+
+- `environment.yml`
+
+---
+
 ## [2026-03-01] 文档与优化更新
 
 ### 背景 / 动机

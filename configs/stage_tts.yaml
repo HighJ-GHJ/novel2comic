@@ -1,0 +1,6 @@
+# TTS 阶段：语音合成
+# 对应 stages/tts、providers/tts/siliconflow_tts
+# 模型与音色见 configs/siliconflow.yaml
+
+instruction_max_len: 12
+use_style_prompt: "endofprompt"  # endofprompt | none | prefix

@@ -27,6 +27,8 @@ from novel2comic.stages.director_review import DirectorReviewStage
 from novel2comic.stages.tts import TTSStage
 from novel2comic.stages.align import AlignStage
 from novel2comic.stages.render import RenderStage
+from novel2comic.stages.anchors_generate import AnchorsGenerateStage
+from novel2comic.stages.image_generate import ImageGenerateStage
 from novel2comic.stages.base import StageContext
 
 
@@ -35,15 +37,16 @@ STAGE_ORDER = [
 	"segment",
 	"plan",
 	"director_review",
+	"anchors",
+	"image",
 	"tts",
 	"align",
-	"image",
 	"render",
 	"export",
 ]
 
 
-def run_until(chapter_dir: str, ctx: StageContext, until: str) -> None:
+def run_until(chapter_dir: str, ctx: StageContext, until: str, from_stage: str | None = None) -> None:
 	paths = chapter_paths(chapter_dir)
 	paths.ensure_dirs()
 
@@ -52,13 +55,20 @@ def run_until(chapter_dir: str, ctx: StageContext, until: str) -> None:
 		"segment": SegmentStage(),
 		"plan": PlanStage(),
 		"director_review": DirectorReviewStage(),
+		"anchors": AnchorsGenerateStage(),
+		"image": ImageGenerateStage(),
 		"tts": TTSStage(),
 		"align": AlignStage(),
 		"render": RenderStage(),
 	}
 
+	skip_until = from_stage
 	for name in STAGE_ORDER:
-		if name in ("image", "export") and until == name:
+		if skip_until and name != skip_until:
+			continue
+		if skip_until and name == skip_until:
+			skip_until = None
+		if name == "export" and until == name:
 			print(f"[INFO] {name} stage not implemented yet; stop here.")
 			break
 

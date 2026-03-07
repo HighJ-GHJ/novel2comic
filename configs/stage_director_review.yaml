@@ -1,0 +1,9 @@
+# Director Review 阶段：LLM 导演审阅
+# 对应 stages/director_review
+
+enabled: true
+apply_patch: true
+
+# LLM 参数（model 为空时用 configs/siliconflow.llm.model）
+model: ""
+temperature: 0.2

@@ -9,10 +9,10 @@ Director Review 阶段：对 ShotScript 做导演视角审阅，输出 patch-onl
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
 
+from novel2comic.core.config_loader import get_stage_config
 from novel2comic.core.io import ChapterPaths, find_project_root
 from novel2comic.core.manifest import load_manifest, save_manifest
 from novel2comic.director_review.apply import apply_director_patch
@@ -22,12 +22,14 @@ from novel2comic.director_review.prompt import SYSTEM_PROMPT, build_user_prompt
 from novel2comic.stages.base import StageContext
 
 
-def _is_enabled() -> bool:
-	return os.environ.get("DIRECTOR_REVIEW_ENABLED", "1").strip().lower() in ("1", "true", "yes")
-
-
-def _apply_patch_enabled() -> bool:
-	return os.environ.get("DIRECTOR_REVIEW_APPLY_PATCH", "1").strip().lower() in ("1", "true", "yes")
+def _director_config() -> dict:
+	cfg = get_stage_config("director_review")
+	return {
+		"enabled": cfg.get("enabled", True),
+		"apply_patch": cfg.get("apply_patch", True),
+		"model": (cfg.get("model") or "").strip() or None,
+		"temperature": float(cfg.get("temperature") or 0.2),
+	}
 
 
 class DirectorReviewStage:
@@ -43,7 +45,7 @@ class DirectorReviewStage:
 			raise ValueError("shotscript has no shots")
 
 		m = load_manifest(paths.manifest)
-		if m.stage not in ("planned", "directed", "tts_done", "aligned", "rendered"):
+		if m.stage not in ("planned", "directed", "images_done", "tts_done", "aligned", "rendered"):
 			raise ValueError(f"Director Review requires planned stage, got {m.stage}")
 
 		# 若已 directed，跳过
@@ -54,19 +56,19 @@ class DirectorReviewStage:
 		paths.director_dir.mkdir(parents=True, exist_ok=True)
 		paths.logs_dir.mkdir(parents=True, exist_ok=True)
 
-		model = os.environ.get("DIRECTOR_REVIEW_MODEL", "").strip() or None
+		dr_cfg = _director_config()
 		t0 = time.perf_counter()
 		director_review: dict
 		used_fallback = False
 
-		if _is_enabled():
+		if dr_cfg["enabled"]:
 			try:
 				from novel2comic.providers.llm.siliconflow_client import load_siliconflow_client
 
 				llm = load_siliconflow_client(project_root=str(find_project_root()))
-				if model:
-					llm.cfg.model = model
-				temperature = float(os.environ.get("DIRECTOR_REVIEW_TEMPERATURE", "0.2").strip() or 0.2)
+				if dr_cfg["model"]:
+					llm.cfg.model = dr_cfg["model"]
+				temperature = dr_cfg["temperature"]
 				# 临时覆盖 temperature（siliconflow_client 写死 0.2，此处不强制改）
 				try:
 					user_prompt = build_user_prompt(ctx.chapter_id, shots)
@@ -118,7 +120,7 @@ class DirectorReviewStage:
 			directed_shots = apply_fallback_gaps(shots)
 			directed_data = dict(data)
 			directed_data["shots"] = directed_shots
-		elif _apply_patch_enabled():
+		elif dr_cfg["apply_patch"]:
 			directed_data, report = apply_director_patch(data, director_review)
 			if report.get("invariant_violation"):
 				directed_shots = apply_fallback_gaps(shots)

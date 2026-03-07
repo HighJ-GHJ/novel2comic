@@ -1,0 +1,29 @@
+# Image 阶段：全幅出图
+# 对应 stages/image_generate、providers/image/image_qwen
+
+mode: "draft"           # draft | refine
+provider: "qwen"        # qwen | flux（预留）
+
+# 尺寸与模型参数（与 siliconflow.image 可叠加，此处优先）
+image_size: "1664x928"
+steps: 50
+cfg: 4.0
+
+# 重试与链式
+max_attempts: 3
+chain_max_hops: 8
+
+# VLM 评审（Strict Image QA，启用后 generate→qc→vlm_review→fail则retry）
+use_vlm_review: false
+review_max_attempts: 8
+
+# Strict 模式策略（Phase2）
+review:
+  strict: true
+  require_char_anchor: true   # 有主角的 shot 必须有 char_anchor 才允许通过
+  require_style_anchor: false
+  enable_recheck: true      # Round1 fail 后做 Round2 窄域复核
+  recheck_model: null       # 可选，默认同 vlm.model
+
+# Prompt
+use_llm_prompt: false   # 是否用 LLM 转英文（FLUX 时有用）

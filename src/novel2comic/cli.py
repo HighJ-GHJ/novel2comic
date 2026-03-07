@@ -26,9 +26,10 @@ STAGES = [
 	"segment",
 	"plan",
 	"director_review",
+	"anchors",
+	"image",
 	"tts",
 	"align",
-	"image",
 	"render",
 	"export",
 ]
@@ -54,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
 	runp.add_argument("--chapter_dir", required=True)
 	runp.add_argument("--novel_id", default=None, help="小说 ID，缺省时从 chapter_dir 父目录名推断")
 	runp.add_argument("--until", default="plan", choices=STAGES)
+	runp.add_argument("--from_stage", default=None, choices=STAGES, help="从指定阶段开始（跳过之前的阶段）")
 
 	return p
 
@@ -68,6 +70,9 @@ def cmd_init(chapter_dir: str) -> None:
 		root / "audio" / "shots",
 		root / "subtitles" / "align",
 		root / "images" / "layers",
+		root / "images" / "shots",
+		root / "images" / "anchors" / "characters",
+		root / "images" / "anchors" / "scenes",
 		root / "video",
 		root / "draft" / "jianying",
 		root / "logs",
@@ -109,7 +114,7 @@ def cmd_prepare(chapters_dir: str, novel_id: str | None = None, chapter: str | N
 	print(f"[OK] prepared {len(chapter_files)} chapter(s), novel_id={resolved_novel_id}")
 
 
-def cmd_run(chapter_dir: str, until: str, novel_id: str | None = None) -> None:
+def cmd_run(chapter_dir: str, until: str, novel_id: str | None = None, from_stage: str | None = None) -> None:
 	from novel2comic.pipeline.orchestrator import run_until
 	from novel2comic.stages.base import StageContext
 
@@ -123,7 +128,7 @@ def cmd_run(chapter_dir: str, until: str, novel_id: str | None = None) -> None:
 		chapter_id=chapter_name,
 	)
 
-	run_until(chapter_dir=chapter_dir, ctx=ctx, until=until)
+	run_until(chapter_dir=chapter_dir, ctx=ctx, until=until, from_stage=from_stage)
 
 
 def main(argv=None) -> None:
@@ -138,7 +143,7 @@ def main(argv=None) -> None:
 		return
 
 	if args.cmd == "run":
-		cmd_run(args.chapter_dir, args.until, novel_id=args.novel_id)
+		cmd_run(args.chapter_dir, args.until, novel_id=args.novel_id, from_stage=args.from_stage)
 		return
 
 
